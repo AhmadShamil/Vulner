@@ -1,0 +1,267 @@
+#!/bin/bash
+
+#Writer:Ahmad Shamil
+#Student: S32
+#Class: CFC020223
+#Lecturer: Kar Wei/James
+
+#Part 1 getting the user's network details
+
+dir=$(find . -type d -name data)
+if [ -z $dir ]
+
+	then
+		mkdir data
+		log1=$(date && echo ": Directory data created")
+		echo $log1 >> data/vulner.log
+fi
+
+iAm=$(whoami)
+log=$(date && echo ": $iAm executed vulner.sh")
+echo $log >> data/vulner.log
+
+#---MAPPING NETWORK AND OPEN PORT STAGE---
+
+echo '--NETWORK MAPPING--'
+echo '--LIVE HOST NETWORK MAP--' > data/userNet
+
+usrip=$(ifconfig | grep broadcast | awk '{print $2}')
+echo -e "\n[*] IP address : $usrip "
+echo -e "\n[*] IP address : $usrip " >> data/userNet
+
+#To retrieve the netmask to determine the user's CIDR
+netmsk=$(ifconfig | grep broadcast | awk '{print $4}')
+echo "[*] Netmask : $netmsk "
+echo "[*] Netmask : $netmsk " >> data/userNet
+
+bcip=$(ifconfig | grep broadcast | awk '{print $(NF)}')
+echo "[*] Broadcast IP : $bcip "
+echo "[*] Broadcast IP : $bcip " >> userNet
+
+#Part 2 getting user's CIDR
+
+if [ $netmsk == '255.255.255.0' ]
+	
+	then
+		echo -e '\n[*] Your CIDR : /24'
+		netrange=$(echo "$usrip"/24)
+		echo "[*] $iAm CIDR : /24" >> data/userNet
+		
+	else
+		if [ $netmsk == '255.255.0.0' ]
+		
+			then
+				echo -e '\n[*] Your CIDR : /16'
+				netrange=$(echo "$usrip"/16)
+				echo "[*] $iAm CIDR : /16" >> data/userNet
+			
+			else
+				if [ $netmsk == '255.0.0.0' ]
+				
+					then
+						echo -e '\n[*] Your CIDR : /8'
+						netrange=$(echo -r "$usrip"/8) 
+						echo "[*] $iAm CIDR : /8" >> data/userNet
+						
+				fi
+		fi
+				 
+fi 
+
+#Part 3 getting user's network range
+#With the CIDR confirmed, we may use netmask command paired with a flag '-r' tp find the network range.
+log2=$(date && echo ": Generating $iAm network range")
+echo $log2 >> data/vulner.log
+
+foundNet=$(netmask -r $netrange)
+echo -n "[*] Your network range - $foundNet"
+echo -n "[*] Your network range - $foundNet" >> data/userNet
+
+#Again with the availability of the CIDR, we may use it to scan the network range for live host.
+#To scan for live host, netdiscover command used paired with two flags:
+#1) -r : To scan for range given instead of auto scan.
+#2) -P : Print results in a format suitable for parsing by another program and stop after active scan.
+echo -e '\n[!] Scanning for IPs on the network... '
+log3=$(date && echo ": Scanned for live host on the network")
+echo $log3 >> data/vulner.log
+
+liveHost=$(sudo netdiscover -r $netrange -P)
+echo '[*] Live host found on network: '
+echo "$liveHost"
+
+echo -e '\n[*] Live host found on network: ' >> data/userNet
+echo "$liveHost" >> data/userNet
+
+#---ENUMERATION STAGE---
+
+echo -e '\n--ENUMERATION OF DISCOVERED LIVE HOST--'
+
+echo -en '\n[!] Would you like to proceed to enumeration? - ' && read option			
+case $option in															
+	Y)																													
+		echo -n '[?] Select IP for enumeration : ' && read ipEnum;;
+																		
+	y)																														
+		echo -n '[?] Select IP for enumeration : ' && read ipEnum;;
+		
+	n)
+		echo '[GOODBYE]' && exit;;
+esac
+
+log4=$(date && echo ": Perform scan and enumeration on $ipEnum")
+echo $log4 >> data/vulner.log
+
+#Perform nmap scan using default nmap scripts to the targeted IP
+echo -e "\n[*] Scanning $ipEnum with default nmap scripting engine"
+log5=$(date && echo ": Scanned with default nmap scripting engine on $ipEnum")
+echo $log5 >> data/vulner.log
+echo '[!] Scan results for default nmap scripting engine.' >> ./data/$ipEnum.enum 
+nmap -sV -p- -sC $ipEnum >> ./data/$ipEnum.enum
+echo "[!] Scan completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+#Perform selected nse on the targeted IP ftp service
+echo -e "\n[*] Scanning $ipEnum ftp service for potential backdoor"
+log6=$(date && echo ": Scanned with ftp-vsftpd-backdoor nmap scripting engine on $ipEnum")
+echo $log6 >> data/vulner.log
+echo -e '\n[!] Scan results for ftp-vsftpd-backdoor.' >> ./data/$ipEnum.enum
+nmap -sV --script ftp-vsftpd-backdoor -p- $ipEnum >> ./data/$ipEnum.enum
+echo "[!] Scan completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+#Perform selected nse on the targeted IP smtp service
+echo -e "\n[*] Scanning $ipEnum smtp service for vunerabilities"
+log7=$(date && echo ": Scanned smtp services for vunerabilities with nmap scripting engine on $ipEnum")
+echo $log7 >> data/vulner.log
+echo -e '\n[!] Scan results for smtp services.' >> ./data/$ipEnum.enum
+nmap -sV --script smtp-* $ipEnum -p- >> ./data/$ipEnum.enum
+echo "[!] Scan completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+#Perform selected nse on the targeted IP distccd service for cve2004-2687
+echo -e "\n[*] Scanning $ipEnum distccd service for cve2004-2687"
+log8=$(date && echo ": Scanned distccd services for cve2004-2687 with nmap scripting engine on $ipEnum")
+echo $log8 >> data/vulner.log
+echo -e '\n[!] Scan results for distccd service cve2004-2687.' >> ./data/$ipEnum.enum
+nmap -sV --script distcc-cve2004-2687 $ipEnum -p- >> ./data/$ipEnum.enum
+echo "[!] Scan completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+#Perform selected nse on the targeted IP java-rmi service
+echo -e "\n[*] Scanning $ipEnum java-rmi service for vunerabilities"
+log9=$(date && echo ": Scanned java-rmi services for vulnerabilities with nmap scripting engine on $ipEnum")
+echo $log9 >> data/vulner.log
+echo -e '\n[!] Scan results for java-rmi service.' >> ./data/$ipEnum.enum
+nmap --script rmi-* $ipEnum -sV -p- >> ./data/$ipEnum.enum
+echo "[!] Scan completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+#Enumerate the samba service using enum4linux
+echo -e "\n[*] Enumerating $ipEnum samba services"
+log10=$(date && echo ": Enumerated samba services of $ipEnum")
+echo $log10 >> data/vulner.log
+echo -e '\n[!] Enumeration results for samba services.' >> ./data/$ipEnum.enum
+enum4linux $ipEnum >> ./data/$ipEnum.enum
+echo "[!] Enumeration completed and saved in data/$ipEnum.enum"
+
+sleep 3
+
+vulner=$(cat ./data/$ipEnum.enum | grep -in exploitable | wc -l)
+
+if [ $vulner != 0 ]
+
+	then
+		echo -e '\n[!] Machine is EXPLOITABLE!!'
+		echo "[!] Number of vulnerabilities found : $vulner"
+		#After filtering out the unecessary information, the number of vulnerabilities found will be printed out.
+		echo "[!] Refer vulnerabilities in documentation of $ipEnum on line:"
+		#The above tells the user which line they can look into this vulnerabilities
+		cat ./data/$ipEnum.enum | grep -in exploitable | awk '{print $1}' | tr -d [:punct:]
+		
+	else
+		echo '[!] Machine is NOT exploitable!!'
+		
+fi
+
+#---CHECK FOR WEAK PASSWORD WITH BRUTEFORCE STAGE---
+
+echo -e '\n-- Check for weak password on available login services --'
+
+#Here user will be given an option to use readily available user/password list or create a new list.
+echo -en '\n[!] Create a user list? y/n - ' && read option2
+
+if [ $option2 == n ]
+
+	then
+		echo -n '[?] Specify user list : ' && read usrLst
+	
+	else
+		nano usrLst.txt
+		usrLst=$(echo usrLst.txt)
+		log11=$(date && echo ": User list created")
+		echo $log11>> data/vulner.log
+fi
+
+echo -en '\n[!] Create a password list? y/n - ' && read option3
+
+if [ $option3 == n ]
+
+	then
+		echo -n '[?] Specify user list : ' && read passLst
+	
+	else
+		nano passLst.txt
+		passLst=$(echo passLst.txt)
+		log12=$(date && echo ": Password list created")
+		echo $log12 >> data/vulner.log
+fi
+
+#From the output result of nmap scans, file is filtered to accquire 3 things:
+#1) Service
+#2) IP address
+#3) Port number
+
+echo -e '\n[?] Checking for available service ... '
+
+echo "[*] Available services for $ipEnum" > data/BF.$ipEnum
+log13=$(date && echo ": Nmap scanned for available services on $ipEnum")
+echo $log13 >> data/vulner.log
+nmap $ipEnum -p- >> data/BF.$ipEnum
+svcAvail=$(cat ./data/BF.$ipEnum | grep open | grep -E 'ssh|ftp|telnet' | head -n 1 | awk '{print $1,$3}')
+echo "[*] Service found : $svcAvail "
+
+echo -e '\n[?] Final preparation for weak passowrd check!!'
+
+echo "[*] User list : $usrLst "
+echo "[*] Password list : $passLst "
+
+svc=$(cat ./data/BF.$ipEnum | grep open | grep -E 'ssh|ftp|telnet' | head -n 1 | awk '{print $3}')
+echo "[*] Service type : $svc"
+
+echo "[*] IP address : $ipEnum "
+
+port=$(echo $svcAvail | tr -d '[:alpha:]|[:punct:]')
+echo -n "[*] Port number : $port"
+
+#Once user confirmed the bruteforce details, script will 2 different tools for bruteforcing:
+#1) Hydra
+#2) Medusa
+echo ''
+echo -e "\n[!] Bruteforcing(Hydra) : $ipEnum $svc service"
+echo -e "\n[*] Bruteforce(Hydra) results for : $ipEnum $svc service" >> data/BF.$ipEnum
+log14=$(date && echo ": Bruteforce $ipEnum $svc service with Hydra")
+echo $log14 >> data/vulner.log
+hydra -L $usrLst -P $passLst $ipEnum -s $port $svc >> data/BF.$ipEnum
+
+echo -e "\n[!] Bruteforcing(Medusa) : $ipEnum $svc service"
+echo -e "\n[*] Bruteforce(Medusa) results for : $ipEnum $svc service" >> data/BF.$ipEnum
+log15=$(date && echo ": Bruteforce $ipEnum $svc service with Medusa")
+echo $log15 >> data/vulner.log
+medusa -U $usrLst -P $passLst -M $svc -n $port -h $ipEnum >> data/BF.$ipEnum
+
+echo -e '\n[!] End of script - Goodbye!!'
